@@ -8,8 +8,12 @@ def fetch_realtime_tunnel_metrics(session, host, device_ip):
     """
     Fetch real-time tunnel health statistics for a device.
     """
-    url = f"https://{host}:443//dataservice/device/app-route/statistics?deviceId={device_ip}"
-    resp = session.get(url, verify=False)
+    url = f"https://{host}:443/dataservice/device/app-route/statistics"
+    resp = session.get(
+        url,
+        params={"deviceId": device_ip},
+        verify=False
+    )
     resp.raise_for_status()
     return resp.json().get("data", [])
 
@@ -22,14 +26,18 @@ def main():
     vm_pass = "password"
 
     # Authenticate
-    auth = Authentication(host=vm_host, user=vm_user, password=vm_pass, validate_certs=False)
+    auth = Authentication(
+        host=vm_host,
+        user=vm_user,
+        password=vm_pass,
+        validate_certs=False
+    )
     session = auth.login()
     print(f"✅ Authenticated to vManage @ {vm_host}\n")
 
     # Fetch edge devices (non-control-plane)
-    dev_api = Device(session=session, host=vm_host)
+    dev_api  = Device(session=session, host=vm_host)
     all_devs = dev_api.get_device_status_list()
-
     edges = [
         d["system-ip"] for d in all_devs
         if d.get("system-ip") not in (None, "0.0.0.0")
@@ -40,7 +48,7 @@ def main():
         print("❌ No data-plane routers found!")
         return
 
-    # Fetch & print real-time tunnel metrics per device
+    # Fetch & print real-time tunnel metrics per device (latest only)
     for ip in edges:
         print(f"--- REAL-TIME TUNNEL METRICS for {ip} ---")
         try:
@@ -53,14 +61,23 @@ def main():
             print("  (no tunnel data)\n")
             continue
 
+        # build a dict to keep only the latest sample per tunnel
+        latest = {}
+        for t in tunnel_data:
+            key = (t.get("src-ip"), t.get("dst-ip"))
+            latest[key] = t
+
         # Print table header
         print(f"{'SRC-IP':<15} {'DST-IP':<15} {'LAT(ms)':>8} {'JIT(ms)':>8} {'LOSS%':>8} {'LAST-UPDATED':>15}")
-        print("-" * 70)
-        for t in tunnel_data:
-            print(f"{t.get('src-ip',''):<15} {t.get('dst-ip',''):<15} "
-                  f"{t.get('mean-latency',0):8} {t.get('mean-jitter',0):8} "
-                  f"{t.get('loss',0):8} {t.get('lastupdated','')}")
+        print("-" * 80)
+        for (src, dst), t in latest.items():
+            lat     = t.get("mean-latency", t.get("latency", 0))
+            jit     = t.get("mean-jitter",  t.get("jitter",  0))
+            loss    = t.get("loss",          t.get("lossPercentage", 0))
+            updated = t.get("lastupdated", "")
+            print(f"{src:<15} {dst:<15} {lat:8} {jit:8} {loss:8} {updated:>15}")
         print()
 
 if __name__ == "__main__":
     main()
+
