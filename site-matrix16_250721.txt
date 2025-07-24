@@ -1,0 +1,5 @@
+type=remotesite,remotesite=svalbard,name=r1001,site_ip=192.168.107.11
+type=remotesite,remotesite=punta,name=r1004,site_ip=192.168.107.14
+type=remotesite,remotesite=troll,name=r1006,site_ip=192.168.107.16 
+type=customer,remotesite=customer01,name=cus01-r1002-01,site_ip=192.168.107.12
+ 
